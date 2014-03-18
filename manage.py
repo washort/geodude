@@ -22,10 +22,27 @@ from wsgiref.simple_server import make_server
 import nose
 from webob import Request
 
+from geodude import load_geoip, load_mmdb, make_application
+
+# Add current directory to path so we can import settings.
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+import settings
 
 parser = argparse.ArgumentParser(description=globals()['__doc__'],
                                  formatter_class=argparse.RawTextHelpFormatter)
 subparsers = parser.add_subparsers(title='Commands')
+
+
+def load_geodude():
+    fmt = getattr(settings, 'GEO_DB_FORMAT', 'geoip')
+    if fmt == 'geoip':
+        load = load_geoip
+    else:
+        load = load_mmdb
+
+    return make_application(
+        load(settings.GEO_DB_PATH),
+        settings.ALLOW_POST)
 
 
 def command(func):
@@ -57,8 +74,7 @@ def command(func):
 @command
 def runserver(port=8000):
     """Run a development instance of the geodude server."""
-    from geodude import application
-
+    application = load_geodude()
     server = make_server('', int(port), application)
     print 'Serving HTTP on port {0}...'.format(port)
     try:
@@ -70,8 +86,7 @@ def runserver(port=8000):
 @command
 def test_ip(ip_address, path='/country.js'):
     """Run a mock request against the service."""
-    from geodude import application
-
+    application = load_geodude()
     request = Request.blank(path, remote_addr=ip_address)
     response = request.get_response(application)
     print response.status
